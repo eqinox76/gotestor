@@ -36,7 +36,6 @@ func main() {
 
 // searches the given path (not following symlinks) and watches all directories and go related files
 func discoverFiles(path string, watcher *fsnotify.Watcher) error {
-	validFilePattern := regexp.MustCompile(`(go\.mod)|(.*\.go)`)
 	return filepath.Walk(
 		path,
 		func(path string, info os.FileInfo, err error) error {
@@ -44,19 +43,16 @@ func discoverFiles(path string, watcher *fsnotify.Watcher) error {
 				return nil
 			}
 
-			base := filepath.Base(path)
 			if info.IsDir() {
 				// ignore hidden directories like .git
+				base := filepath.Base(path)
 				if base != "." && strings.HasPrefix(base, ".") {
 					return filepath.SkipDir
 				}
-			} else if !validFilePattern.MatchString(filepath.Base(path)) {
-				return nil
-			}
-
-			err = watcher.Add(path)
-			if err != nil {
-				log.Fatal(err)
+				err = watcher.Add(path)
+				if err != nil {
+					log.Fatal(err)
+				}
 			}
 
 			return nil
@@ -65,6 +61,7 @@ func discoverFiles(path string, watcher *fsnotify.Watcher) error {
 }
 
 func fileEventWatcher(watcher *fsnotify.Watcher) {
+	validFilePattern := regexp.MustCompile(`(go\.mod)|(.*\.go)`)
 	for {
 		select {
 		case event, ok := <-watcher.Events:
@@ -73,7 +70,12 @@ func fileEventWatcher(watcher *fsnotify.Watcher) {
 			}
 
 			info, err := os.Stat(event.Name)
-			if err == nil && info.IsDir() {
+			if err != nil {
+				// most likely no access. lets ignore it
+				continue
+			}
+
+			if info.IsDir() {
 				if event.Op&fsnotify.Create == fsnotify.Create ||
 					event.Op&fsnotify.Rename == fsnotify.Rename {
 					err := discoverFiles(event.Name, watcher)
@@ -84,7 +86,10 @@ func fileEventWatcher(watcher *fsnotify.Watcher) {
 				continue
 			}
 
-			atomic.StoreUint32(&changedFlag, 1)
+			if validFilePattern.MatchString(filepath.Base(event.Name)) {
+				atomic.StoreUint32(&changedFlag, 1)
+			}
+
 		case err, ok := <-watcher.Errors:
 			if !ok {
 				return
