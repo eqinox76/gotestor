@@ -6,7 +6,7 @@ Simple tool to continously run golang unit tests.
 # install
 Either build and install it directly via
 ```
-go install github.com/eqinox76/gotestor
+go get github.com/eqinox76/gotestor
 ```
 and make sure the $GOROOT/bin or $GOTOOLDIR directory is in your path.
 
